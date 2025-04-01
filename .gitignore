@@ -1,3 +1,32 @@
-venv
+# 🐍 Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
 
-logs
+# 🌱 Virtual environment
+venv/
+.env/
+.venv/
+
+# 🍎 macOS
+.DS_Store
+
+# 🧠 PyCharm / IntelliJ
+.idea/
+*.iml
+
+# ⚙️ Airflow
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+logs/
+
+# 🔒 Python version file
+.python-version
+
+# 🧪 Constraints files (local)
+constraints.txt
+
+# ❌ Ignore compiled DAGs
+dags/__pycache__/
