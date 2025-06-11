@@ -28,5 +28,7 @@ logs/
 # 🧪 Constraints files (local)
 constraints.txt
 
+data/output
+
 # ❌ Ignore compiled DAGs
 dags/__pycache__/

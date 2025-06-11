@@ -41,10 +41,11 @@ Salvează
 Scrie rezultatul ca fișier CSV cu header, din Spark.
 """
 
+
 def main():
     spark = SparkSession.builder \
-                .appName("latencies_by_dataproduct") \
-                .getOrCreate()
+        .appName("latencies_by_dataproduct") \
+        .getOrCreate()
 
     df = generate_events_sample_data(spark)
 
@@ -68,25 +69,25 @@ def main():
 
     df = df.groupBy(["dataset", "dataproduct", "mandant"]) \
         .agg(
-            count("*").alias("nr_of_events"),
-            min("latency_sec").alias("min_sec"),
-            avg("latency_sec").cast("long").alias("avg_sec"),
-            max("latency_sec").alias("max_sec")
-        ).sort(["dataset", "dataproduct", "mandant"])
+        count("*").alias("nr_of_events"),
+        min("latency_sec").alias("min_sec"),
+        avg("latency_sec").cast("long").alias("avg_sec"),
+        max("latency_sec").alias("max_sec")
+    ).sort(["dataset", "dataproduct", "mandant"])
 
     df = df.withColumn(
         "min_time",
         when(col("min_sec") < 86400, lit("0d 0h 0m"))
-            .otherwise(
-                format_string(
-                    "%02d:%02d:%02d",
-                    floor(col("min_sec")/3600).cast("int"),
-                    floor((col("min_sec") % 3600) / 60).cast("int"),
-                    (col("min_sec") % 60).cast("int")
-                )
+        .otherwise(
+            format_string(
+                "%02d:%02d:%02d",
+                floor(col("min_sec") / 3600).cast("int"),
+                floor((col("min_sec") % 3600) / 60).cast("int"),
+                (col("min_sec") % 60).cast("int")
             )
+        )
     ) \
-    .withColumn(
+        .withColumn(
         "avg_time",
         when(col("avg_sec") < 86400, lit("0d 0h 0m"))
         .otherwise(
@@ -98,7 +99,7 @@ def main():
             )
         )
     ) \
-    .withColumn(
+        .withColumn(
         "max_time",
         when(col("max_sec") < 86400, lit("0d 0h 0m"))
         .otherwise(
@@ -112,6 +113,7 @@ def main():
     )
 
     df.show()
+
 
 if __name__ == "__main__":
     main()

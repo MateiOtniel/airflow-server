@@ -1,0 +1,7 @@
+[
+  {"user_id": 101, "item": "laptop",  "price": 1200.50, "quantity": 1},
+  {"user_id": 102, "item": "mouse",   "price":   25.00, "quantity": 2},
+  {"user_id": 101, "item": "ram",     "price":   80.00, "quantity": 2},
+  {"user_id": 103, "item": "ssd",     "price":  150.00, "quantity": 1},
+  {"user_id": 102, "item": "monitor", "price":  300.00, "quantity": 1}
+]
