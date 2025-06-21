@@ -27,12 +27,18 @@ def main():
     visits_final = visits_normalized \
         .groupBy("user_id", "hour") \
         .count() \
+        .sort("hour", "user_id") \
         .withColumnRenamed("count", "visits")
+
+    print("------Visits show------")
+    visits_final.show()
 
     visits_final.write \
         .partitionBy("hour") \
         .mode("overwrite") \
         .parquet(args.output)
 
-    if __name__ == "__main__":
-        main()
+    spark.stop()
+
+if __name__ == "__main__":
+    main()
