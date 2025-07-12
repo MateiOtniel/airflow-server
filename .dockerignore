@@ -1,0 +1,12 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+# Local venv
+.venv/
+# Airflow DB & logs
+airflow.db
+logs/
+# Docker
+*.log
+docker-compose.override.yaml

@@ -14,7 +14,6 @@ with DAG(
         task_id="sales_job",
         application="scripts/spark_jobs/sales_job.py",
         conn_id="spark_default",
-        env_vars={"PYTHONPATH": "/Users/mateiotniel/Projects/airflow-server"},
         verbose=True,
         packages="org.apache.spark:spark-sql_2.12:3.5.1"
     )

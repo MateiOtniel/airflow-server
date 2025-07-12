@@ -13,7 +13,6 @@ with DAG(
         task_id="run_latencies_by_dataproduct_job",
         application="scripts/spark_jobs/latencies_by_dataproduct_job.py",
         conn_id="spark_default",
-        env_vars={"PYTHONPATH": "/Users/mateiotniel/Projects/airflow-server"},
         verbose=True,
         packages="org.apache.spark:spark-sql_2.12:3.5.1"
     )

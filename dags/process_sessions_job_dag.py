@@ -59,7 +59,6 @@ with DAG(
             "--date", "2025-06-14"
         ],
         conn_id = "spark_default",
-        env_vars = {"PYTHONPATH": "/Users/mateiotniel/Projects/airflow-server"},
         verbose = True
     )
 

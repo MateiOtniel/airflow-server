@@ -61,7 +61,6 @@ with DAG(
             "--output", "{{ ti.xcom_pull(task_ids='build_paths', key='output_path') }}"
         ],
         conn_id="spark_default",
-        env_vars={"PYTHONPATH": "/Users/mateiotniel/Projects/airflow-server"},
         verbose=True,
     )
 
