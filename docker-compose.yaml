@@ -29,15 +29,11 @@ services:
       # - ./keys:/opt/airflow/keys:ro    # GCP service-account
     depends_on:
       - postgres
-    command: >
+    command: >-
       bash -c "airflow db init &&
-               airflow users create \
-                 --username admin \
-                 --password admin \
-                 --firstname Admin \
-                 --lastname User \
-                 --role Admin \
-                 --email admin@example.com &&
+               airflow users create --username admin --password admin \
+                                    --firstname Admin --lastname User \
+                                    --role Admin --email admin@example.com &&
                airflow webserver"
 
   scheduler:
