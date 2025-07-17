@@ -1,0 +1,7 @@
+# Kill everything related to airflow
+ps aux \
+  | grep airflow \
+  | grep -v postgres \
+  | grep -v grep \
+  | awk '{print $2}' \
+  | xargs kill
