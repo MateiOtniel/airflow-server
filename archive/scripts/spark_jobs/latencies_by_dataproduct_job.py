@@ -3,7 +3,7 @@ from pyspark.sql.functions import (
     to_timestamp, unix_timestamp, col, date_sub,
     current_date, count, min, avg, max, lit, when, format_string, floor
 )
-from utils.events_sample_data import generate_events_sample_data
+from archive.utils.events_sample_data import generate_events_sample_data
 
 """
 Parsează

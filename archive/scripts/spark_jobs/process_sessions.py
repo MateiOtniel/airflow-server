@@ -3,7 +3,7 @@ from datetime import timedelta, datetime
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import to_timestamp, col, lit
 
-from utils.parser import parse_args
+from archive.utils.parser import parse_args
 
 
 def main():
