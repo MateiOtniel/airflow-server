@@ -34,7 +34,7 @@ USER root
 # 7) Copiază-ți codul în directorul definit
 COPY dags/    ${AIRFLOW_HOME}/dags/
 COPY scripts/ ${AIRFLOW_HOME}/scripts/
-COPY data/    ${AIRFLOW_HOME}/data/
+COPY archive/data/    ${AIRFLOW_HOME}/data/
 COPY plugins/ ${AIRFLOW_HOME}/plugins/
 
 # 8) Asigură permisiunile corecte pentru utilizatorul airflow

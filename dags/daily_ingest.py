@@ -1,4 +1,4 @@
-# dags/upload_to_gcs_dag.py
+# dags/daily_ingest.py
 import os
 from datetime import datetime, timedelta
 
@@ -13,7 +13,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id="upload_to_gcs_dag",
+    dag_id="daily_ingest",
     default_args=default_args,
     start_date=datetime(2025, 7, 15),
     catchup=False,
