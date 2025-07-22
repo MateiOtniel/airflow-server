@@ -1,54 +1,163 @@
-version: '3.8'
 services:
+  redis:
+    image: redis:6
+    container_name: airflow_redis
+    restart: always
+
   postgres:
     image: postgres:15
+    container_name: airflow_postgres
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    restart: always
+
+  airflow-init:
+    build: .
+    container_name: airflow_init
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      PYTHONPATH: /opt/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GCS_BUCKET: bank-raw-daily-ingest
     volumes:
-      - postgres-db:/var/lib/postgresql/data
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./logs:/opt/airflow/logs
+    secrets:
+      - gcs_bucket_key
+    entrypoint:
+      - bash
+      - -c
+      - >
+        airflow db init &&
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password admin
+    restart: "no"
 
   webserver:
     build: .
+    container_name: airflow_webserver
+    depends_on:
+      - airflow-init
+      - postgres
+      - redis
     ports:
       - "8080:8080"
     environment:
-      # Folosim LocalExecutor pentru simplitate local
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      # Dacă e nevoie de legătura la Cloud Storage / Cloud SQL:
-      # GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/keys/gcp-sa.json
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW__WEBSERVER__WEB_SERVER_HOST: "0.0.0.0"
+      AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8080"
+      AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8080
+      PYTHONPATH: /opt/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GCS_BUCKET: bank-raw-daily-ingest
     volumes:
-      # Pentru dezvoltare rapidă montezi codul local:
-      - ./dags:/opt/airflow/dags:ro
-      - ./scripts:/opt/airflow/scripts:ro
-      - ./data:/opt/airflow/data:ro
-      # - ./keys:/opt/airflow/keys:ro    # GCP service-account
-    depends_on:
-      - postgres
-    command: >-
-      bash -c "airflow db init &&
-               airflow users create --username admin --password admin \
-                                    --firstname Admin --lastname User \
-                                    --role Admin --email admin@example.com &&
-               airflow webserver"
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./logs:/opt/airflow/logs
+    secrets:
+      - gcs_bucket_key
+    command: webserver
+    restart: always
 
   scheduler:
     build: .
+    container_name: airflow_scheduler
     depends_on:
-      - postgres
+      - webserver
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      PYTHONPATH: /opt/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GCS_BUCKET: bank-raw-daily-ingest
     volumes:
-      - ./dags:/opt/airflow/dags:ro
-      - ./scripts:/opt/airflow/scripts:ro
-      - ./data:/opt/airflow/data:ro
-    command: airflow scheduler
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./logs:/opt/airflow/logs
+    secrets:
+      - gcs_bucket_key
+    command: scheduler
+    restart: always
 
-volumes:
-  postgres-db:
+  worker:
+    build: .
+    container_name: airflow_worker
+    depends_on:
+      - scheduler
+      - postgres
+      - redis
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      PYTHONPATH: /opt/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GCS_BUCKET: bank-raw-daily-ingest
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./logs:/opt/airflow/logs
+    secrets:
+      - gcs_bucket_key
+    command: celery worker
+    restart: always
+
+  flower:
+    build: .
+    container_name: airflow_flower
+    depends_on:
+      - redis
+      - postgres
+    ports:
+      - "5555:5555"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+      PYTHONPATH: /opt/airflow
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GCS_BUCKET: bank-raw-daily-ingest
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./logs:/opt/airflow/logs
+    secrets:
+      - gcs_bucket_key
+    command: celery flower
+    restart: always
+
+secrets:
+  gcs_bucket_key:
+    file: ./gcs-bucket-key.json
