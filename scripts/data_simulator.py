@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
+import glob
 import os
 import random
-import uuid
-import glob
 import shutil
+import uuid
 from datetime import datetime, timedelta
-import argparse
 
+from google.cloud import storage
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import (
     StructType, StructField,
     StringType, IntegerType, DoubleType, TimestampType
 )
-from google.cloud import storage
+
 from plugins.data_categories import (ACCOUNT_TYPES, CATEGORIES, LOAN_TYPES, MERCHANTS)
 
 
@@ -39,12 +39,10 @@ def write_single_csv(df: DataFrame, temp_dir: str, final_path: str):
     """
     Coalesce to one partition, write to temp_dir, then upload the single CSV to final_path on GCS.
     """
-    # remove any previous temp_dir
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
     df.coalesce(1).write.mode("overwrite").option("header", "true").csv(temp_dir)
 
-    # find the single part file
     part_file = next(glob.iglob(os.path.join(temp_dir, "part-*.csv")))
     bucket_name, blob_path = final_path.replace("gs://", "").split("/", 1)
 
@@ -53,24 +51,40 @@ def write_single_csv(df: DataFrame, temp_dir: str, final_path: str):
     blob = bucket.blob(blob_path)
     blob.upload_from_filename(part_file)
 
-    # cleanup
     shutil.rmtree(temp_dir)
 
 
 def generate_and_upload(spark: SparkSession, date: str, bucket: str):
-    base_gs = f"gs://{bucket}/raw"
     today = datetime.strptime(date, "%Y-%m-%d")
 
+    # ----------- CONFIG -----------
+    NUM_CLIENTS = int(os.getenv("NUM_CLIENTS", 10_000))
+
+    SALES_PER_CLIENT_RANGE   = (10, 50)
+    ACCOUNTS_PER_CLIENT_RANGE = (0.9, 1.3)
+    LOANS_PER_CLIENT_RANGE   = (0.03, 0.08)
+    FEES_PER_LOAN_RANGE      = (0.20, 0.40)
+    # ------------------------------
+
+    # Master list de clienți
+    client_ids = list(range(1, NUM_CLIENTS + 1))
+    random.shuffle(client_ids)
+    pick_client = lambda: random.choice(client_ids)
+
+    # Calculează mărimi
+    sales_count   = int(NUM_CLIENTS * random.uniform(*SALES_PER_CLIENT_RANGE))
+    accounts_count= int(NUM_CLIENTS * random.uniform(*ACCOUNTS_PER_CLIENT_RANGE))
+    loans_count   = int(NUM_CLIENTS * random.uniform(*LOANS_PER_CLIENT_RANGE))
+
     # SALES
-    count = int(500_000 * random.uniform(0.8, 1.2))
     sales_rows = [{
         "transaction_id":   str(uuid.uuid4()),
-        "client_id":        random.randint(1, 10000),
+        "client_id":        pick_client(),
         "transaction_date": today + timedelta(hours=random.randrange(24), minutes=random.randrange(60)),
         "amount":           round(random.uniform(5, 2000), 2),
         "merchant":         random.choice(MERCHANTS),
         "category":         random.choice(CATEGORIES),
-    } for _ in range(count)]
+    } for _ in range(sales_count)]
     sales_schema = StructType([
         StructField("transaction_id",   StringType(), True),
         StructField("client_id",        IntegerType(), True),
@@ -80,18 +94,16 @@ def generate_and_upload(spark: SparkSession, date: str, bucket: str):
         StructField("category",         StringType(), True),
     ])
     sales_df = _inject_errors_spark(sales_rows, sales_schema, 0.05, spark)
-    out_name = f"sales/sales_{date.replace('-', '_')}.csv"
-    write_single_csv(sales_df, f"/tmp/sales_{date}", f"gs://{bucket}/{out_name}")
+    write_single_csv(sales_df, f"/tmp/sales_{date}", f"gs://{bucket}/sales/sales_{date.replace('-', '_')}.csv")
 
     # ACCOUNTS
-    count = int(1_000 * random.uniform(0.8, 1.2))
     acc_rows = [{
         "account_id":      str(uuid.uuid4()),
-        "client_id":       random.randint(1, 10000),
+        "client_id":       pick_client(),
         "account_type":    random.choice(ACCOUNT_TYPES),
         "opening_balance": round(random.uniform(0, 5000), 2),
         "open_date":       today + timedelta(hours=random.randrange(24), minutes=random.randrange(60)),
-    } for _ in range(count)]
+    } for _ in range(accounts_count)]
     acc_schema = StructType([
         StructField("account_id",      StringType(), True),
         StructField("client_id",       IntegerType(), True),
@@ -100,20 +112,18 @@ def generate_and_upload(spark: SparkSession, date: str, bucket: str):
         StructField("open_date",       TimestampType(), True),
     ])
     acc_df = _inject_errors_spark(acc_rows, acc_schema, 0.03, spark)
-    out_name = f"accounts/accounts_{date.replace('-', '_')}.csv"
-    write_single_csv(acc_df, f"/tmp/accounts_{date}", f"gs://{bucket}/{out_name}")
+    write_single_csv(acc_df, f"/tmp/accounts_{date}", f"gs://{bucket}/accounts/accounts_{date.replace('-', '_')}.csv")
 
     # LOANS
-    count = int(15_000 * random.uniform(0.8, 1.2))
     loan_rows = [{
         "loan_id":          str(uuid.uuid4()),
-        "client_id":        random.randint(1, 10000),
+        "client_id":        pick_client(),
         "principal_amount": round(random.uniform(1000, 50000), 2),
         "interest_rate":    round(random.uniform(1.5, 12.0), 2),
         "start_date":       today + timedelta(hours=random.randrange(24), minutes=random.randrange(60)),
         "term_months":      random.choice([12,24,36,48,60]),
         "loan_type":        random.choice(LOAN_TYPES),
-    } for _ in range(count)]
+    } for _ in range(loans_count)]
     loan_schema = StructType([
         StructField("loan_id",          StringType(), True),
         StructField("client_id",        IntegerType(), True),
@@ -124,19 +134,19 @@ def generate_and_upload(spark: SparkSession, date: str, bucket: str):
         StructField("loan_type",        StringType(), True),
     ])
     loan_df = _inject_errors_spark(loan_rows, loan_schema, 0.04, spark)
-    out_name = f"loans/loans_{date.replace('-', '_')}.csv"
-    write_single_csv(loan_df, f"/tmp/loans_{date}", f"gs://{bucket}/{out_name}")
+    write_single_csv(loan_df, f"/tmp/loans_{date}", f"gs://{bucket}/loans/loans_{date.replace('-', '_')}.csv")
 
     # DELAY_FEES
-    count = int(1_000 * random.uniform(0.8, 1.2))
+    loan_ids = [r["loan_id"] for r in loan_rows]
+    fees_count = int(len(loan_ids) * random.uniform(*FEES_PER_LOAN_RANGE))
     fee_rows = [{
         "fee_id":       str(uuid.uuid4()),
-        "client_id":    random.randint(1, 10000),
-        "loan_id":      str(uuid.uuid4()),
+        "client_id":    pick_client(),
+        "loan_id":      random.choice(loan_ids),
         "fee_amount":   round(random.uniform(10, 500), 2),
         "fee_date":     today + timedelta(hours=random.randrange(24), minutes=random.randrange(60)),
         "days_delayed": random.randint(1, 90),
-    } for _ in range(count)]
+    } for _ in range(fees_count)]
     fee_schema = StructType([
         StructField("fee_id",       StringType(), True),
         StructField("client_id",    IntegerType(), True),
@@ -146,12 +156,10 @@ def generate_and_upload(spark: SparkSession, date: str, bucket: str):
         StructField("days_delayed", IntegerType(), True),
     ])
     fee_df = _inject_errors_spark(fee_rows, fee_schema, 0.02, spark)
-    out_name = f"delay_fees/delay_fees_{date.replace('-', '_')}.csv"
-    write_single_csv(fee_df, f"/tmp/delay_fees_{date}", f"gs://{bucket}/{out_name}")
+    write_single_csv(fee_df, f"/tmp/delay_fees_{date}", f"gs://{bucket}/delay_fees/delay_fees_{date.replace('-', '_')}.csv")
 
 
 def main():
-    # get bucket from env
     bucket = os.getenv("GCS_BUCKET")
     if not bucket:
         raise RuntimeError("Environment variable GCS_BUCKET must be set")
