@@ -1,4 +1,4 @@
-from pyspark.sql.connect.session import SparkSession
+from pyspark.sql import SparkSession
 import logging
 
 def main():

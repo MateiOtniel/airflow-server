@@ -16,7 +16,7 @@ with DAG(
     wait_sales = GCSObjectExistenceSensor(
         task_id = 'wait_for_sales',
         bucket = BUCKET,
-        object = 'sales/sales_{{ params.date or ds | replace("-", "_") }}.csv',
+        object = 'sales/sales_{{ (params.date or ds) | replace("-", "_") }}.csv',
         google_cloud_conn_id = 'google_cloud_default',
         poke_interval = 60,
         timeout = 30 * 60,
@@ -35,7 +35,6 @@ with DAG(
         task_id = 'run_daily_sales',
         application = 'scripts/spark_jobs/daily_sales.py',
         conn_id = 'spark_default',
-        verbose = True,
     )
 
     [wait_sales, wait_accounts] >> spark_job
