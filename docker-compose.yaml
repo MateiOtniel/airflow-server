@@ -46,7 +46,6 @@ services:
       PYTHONPATH: /opt/airflow
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
-      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -89,7 +88,6 @@ services:
       PYTHONPATH: /opt/airflow
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
-      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -114,7 +112,6 @@ services:
       PYTHONPATH: /opt/airflow
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
-      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -122,7 +119,13 @@ services:
       - ./logs:/opt/airflow/logs
     secrets:
       - google_service_account_key
-    command: scheduler
+      - metadata_db_conn
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export AIRFLOW_CONN_METADATA_DB="$(cat /run/secrets/metadata_db_conn)"
+        exec airflow scheduler
     restart: always
 
   worker:
@@ -141,7 +144,6 @@ services:
       PYTHONPATH: /opt/airflow
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
-      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -149,7 +151,13 @@ services:
       - ./logs:/opt/airflow/logs
     secrets:
       - google_service_account_key
-    command: celery worker
+      - metadata_db_conn
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export AIRFLOW_CONN_METADATA_DB="$(cat /run/secrets/metadata_db_conn)"
+        exec airflow celery worker
     restart: always
 
   flower:
@@ -169,7 +177,6 @@ services:
       PYTHONPATH: /opt/airflow
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
-      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -177,9 +184,16 @@ services:
       - ./logs:/opt/airflow/logs
     secrets:
       - google_service_account_key
-    command: celery flower
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export AIRFLOW_CONN_METADATA_DB="$(cat /run/secrets/metadata_db_conn)"
+        exec airflow celery flower
     restart: always
 
 secrets:
   google_service_account_key:
-    file: google-service-account-key.json
+    file: secrets/google-service-account-key.json
+  metadata_db_conn:
+    file: secrets/metadata_db_conn.txt
