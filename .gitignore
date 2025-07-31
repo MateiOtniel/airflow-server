@@ -7,7 +7,7 @@ __pycache__/
 # 🌱 Virtual environment
 .env
 .venv/
-gcs-bucket-key.json
+google-service-account-key.json
 
 # 🍎 macOS
 .DS_Store

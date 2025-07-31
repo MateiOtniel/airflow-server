@@ -1,8 +1,11 @@
+import os
+
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.google.cloud.sensors.gcs import GCSObjectExistenceSensor
-import os
-from airflow.models.param import Param
+
+from dags.helpers.logging import log_dag_status
 
 BUCKET = os.getenv("GCS_BUCKET")
 
@@ -11,7 +14,9 @@ with DAG(
     catchup = False,
     params = {
         "date": Param("", type = ["string", "null"])
-    }
+    },
+    on_success_callback = log_dag_status,
+    on_failure_callback = log_dag_status,
 ) as dag:
     wait_sales = GCSObjectExistenceSensor(
         task_id = 'wait_for_sales',

@@ -1,4 +1,15 @@
 services:
+  cloudsql-proxy:
+    image: gcr.io/cloudsql-docker/gce-proxy:1.33.1
+    container_name: cloudsql-proxy
+    command: >
+      /cloud_sql_proxy
+      -instances=${GCP_PROJECT_ID}:${GCP_REGION}:${CLOUDSQL_INSTANCE_ID}=tcp:0.0.0.0:5433
+      -credential_file=/run/secrets/google_service_account_key
+    secrets:
+      - google_service_account_key
+    restart: "no"
+
   redis:
     image: redis:6
     container_name: airflow_redis
@@ -25,25 +36,28 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      cloudsql-proxy:
+        condition: service_started
     environment:
       AIRFLOW__CORE__EXECUTOR: CeleryExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       PYTHONPATH: /opt/airflow
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
+      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./logs:/opt/airflow/logs
     secrets:
-      - gcs_bucket_key
+      - google_service_account_key
     entrypoint:
       - bash
       - -c
-      - >
+      - |
         airflow db init &&
         airflow users create \
           --username admin \
@@ -61,6 +75,7 @@ services:
       - airflow-init
       - postgres
       - redis
+      - cloudsql-proxy
     ports:
       - "8080:8080"
     environment:
@@ -72,15 +87,16 @@ services:
       AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8080"
       AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8080
       PYTHONPATH: /opt/airflow
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
+      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./logs:/opt/airflow/logs
     secrets:
-      - gcs_bucket_key
+      - google_service_account_key
     command: webserver
     restart: always
 
@@ -89,21 +105,23 @@ services:
     container_name: airflow_scheduler
     depends_on:
       - webserver
+      - cloudsql-proxy
     environment:
       AIRFLOW__CORE__EXECUTOR: CeleryExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       PYTHONPATH: /opt/airflow
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
+      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./logs:/opt/airflow/logs
     secrets:
-      - gcs_bucket_key
+      - google_service_account_key
     command: scheduler
     restart: always
 
@@ -114,21 +132,23 @@ services:
       - scheduler
       - postgres
       - redis
+      - cloudsql-proxy
     environment:
       AIRFLOW__CORE__EXECUTOR: CeleryExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       PYTHONPATH: /opt/airflow
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
+      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./logs:/opt/airflow/logs
     secrets:
-      - gcs_bucket_key
+      - google_service_account_key
     command: celery worker
     restart: always
 
@@ -138,6 +158,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - cloudsql-proxy
     ports:
       - "5555:5555"
     environment:
@@ -146,18 +167,19 @@ services:
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       PYTHONPATH: /opt/airflow
-      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcs_bucket_key
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
+      AIRFLOW_CONN_METADATA_DB: ${AIRFLOW_CONN_METADATA_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./logs:/opt/airflow/logs
     secrets:
-      - gcs_bucket_key
+      - google_service_account_key
     command: celery flower
     restart: always
 
 secrets:
-  gcs_bucket_key:
-    file: ./gcs-bucket-key.json
+  google_service_account_key:
+    file: google-service-account-key.json
