@@ -8,6 +8,7 @@ __pycache__/
 .env
 .venv/
 google-service-account-key.json
+metadata_db_conn.txt
 
 # 🍎 macOS
 .DS_Store
