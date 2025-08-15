@@ -1,6 +1,5 @@
 FROM apache/airflow:2.10.5-python3.11
 
-# Install Java (JRE) and procps (for `ps`) as root, then clean up apt lists
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -25,3 +24,15 @@ RUN pip install --no-cache-dir --upgrade pip setuptools \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.11.txt" \
       -r ${AIRFLOW_HOME}/requirements.txt \
  && rm ${AIRFLOW_HOME}/requirements.txt
+
+# ---- Installing BigQuery connectors în pyspark/jars ----
+USER root
+ARG BQ_VER=0.36.3
+ARG BQ_JAR="spark-bigquery-with-dependencies_2.12-${BQ_VER}.jar"
+RUN py_site=$(python -c "import pyspark, os; print(os.path.dirname(pyspark.__file__))") \
+ && mkdir -p "${py_site}/jars" \
+ && curl -fSL "https://repo1.maven.org/maven2/com/google/cloud/spark/spark-bigquery-with-dependencies_2.12/${BQ_VER}/${BQ_JAR}" \
+      -o "/tmp/${BQ_JAR}" \
+ && mv "/tmp/${BQ_JAR}" "${py_site}/jars/${BQ_JAR}" \
+ && chown -R airflow:root "${py_site}/jars"
+USER airflow

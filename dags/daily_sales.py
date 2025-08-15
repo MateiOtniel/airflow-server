@@ -8,6 +8,7 @@ from airflow.providers.google.cloud.sensors.gcs import GCSObjectExistenceSensor
 from dags.helpers.logging import log_dag_status
 
 BUCKET = os.getenv("GCS_BUCKET")
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 
 with DAG(
     dag_id = "daily_sales",
@@ -40,6 +41,13 @@ with DAG(
         task_id = 'run_daily_sales',
         application = 'scripts/spark_jobs/daily_sales.py',
         conn_id = 'spark_default',
+        application_args = [
+            "--date", "{{ (params.date or ds) }}",
+            "--project", GCP_PROJECT_ID,
+            "--dataset", "bank_raw_daily_ingest_analytics",
+            "--table", "daily_sales",
+            "--temp-bucket", BUCKET,
+        ]
     )
 
     [wait_sales, wait_accounts] >> spark_job
