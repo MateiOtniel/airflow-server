@@ -2,6 +2,7 @@ import os
 
 from airflow import DAG
 from airflow.models.param import Param
+from airflow.operators.email import EmailOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.google.cloud.sensors.gcs import GCSObjectExistenceSensor
 
@@ -50,4 +51,11 @@ with DAG(
         ]
     )
 
-    [wait_sales, wait_accounts] >> spark_job
+    mail = EmailOperator(
+        task_id = 'send_email',
+        to = 'matei.otniel20@gmail.com',
+        subject = 'Dag Run Succes',
+        html_content = '<p>It works! :)</p>'
+    )
+
+    [wait_sales, wait_accounts] >> spark_job >> mail

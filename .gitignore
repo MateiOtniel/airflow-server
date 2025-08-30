@@ -15,23 +15,13 @@ __pycache__/
 .idea/
 *.iml
 
-# ⚙️ Airflow
-airflow.db
-airflow.cfg
-airflow-webserver.pid
-logs/
-
-# 🔒 Python version file
-.python-version
-
-# 🧪 Constraints files (local)
-constraints.txt
-
 # ❌ Ignore compiled DAGs
 dags/__pycache__/
+
+logs/
 
 # Unused dags
 archive/
 
-google-service-account-key.json
-metadata_db_conn.txt
+# Secret folder
+secrets/

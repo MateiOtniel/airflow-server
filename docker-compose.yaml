@@ -89,6 +89,11 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
       GCP_PROJECT_ID: accesa-playground
+      AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+      AIRFLOW__SMTP__SMTP_PORT: "587"
+      AIRFLOW__SMTP__SMTP_STARTTLS: "True"
+      AIRFLOW__SMTP__SMTP_SSL: "False"
+#      AIRFLOW__SMTP__SMTP_MAIL_FROM: "matei.otniel20@gmail.com"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -96,7 +101,16 @@ services:
       - ./logs:/opt/airflow/logs
     secrets:
       - google_service_account_key
-    command: webserver
+      - smtp_user
+      - smtp_password
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export AIRFLOW__SMTP__SMTP_MAIL_FROM="$(cat /run/secrets/smtp_user)"
+        export AIRFLOW__SMTP__SMTP_USER="$(cat /run/secrets/smtp_user)"
+        export AIRFLOW__SMTP__SMTP_PASSWORD="$(cat /run/secrets/smtp_password)"        
+        exec airflow webserver
     restart: always
 
   scheduler:
@@ -114,6 +128,11 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
       GCP_PROJECT_ID: accesa-playground
+      AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+      AIRFLOW__SMTP__SMTP_PORT: "587"
+      AIRFLOW__SMTP__SMTP_STARTTLS: "True"
+      AIRFLOW__SMTP__SMTP_SSL: "False"
+#      AIRFLOW__SMTP__SMTP_MAIL_FROM: "matei.otniel20@gmail.com"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -122,11 +141,16 @@ services:
     secrets:
       - google_service_account_key
       - metadata_db_conn
+      - smtp_user
+      - smtp_password
     entrypoint:
       - sh
       - -c
       - |
         export AIRFLOW_CONN_METADATA_DB="$(cat /run/secrets/metadata_db_conn)"
+        export AIRFLOW__SMTP__SMTP_MAIL_FROM="$(cat /run/secrets/smtp_user)"
+        export AIRFLOW__SMTP__SMTP_USER="$(cat /run/secrets/smtp_user)"
+        export AIRFLOW__SMTP__SMTP_PASSWORD="$(cat /run/secrets/smtp_password)"        
         exec airflow scheduler
     restart: always
 
@@ -147,6 +171,11 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_service_account_key
       GCS_BUCKET: bank-raw-daily-ingest
       GCP_PROJECT_ID: accesa-playground
+      AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+      AIRFLOW__SMTP__SMTP_PORT: "587"
+      AIRFLOW__SMTP__SMTP_STARTTLS: "True"
+      AIRFLOW__SMTP__SMTP_SSL: "False"
+#      AIRFLOW__SMTP__SMTP_MAIL_FROM: "matei.otniel20@gmail.com"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
@@ -155,11 +184,16 @@ services:
     secrets:
       - google_service_account_key
       - metadata_db_conn
+      - smtp_user
+      - smtp_password
     entrypoint:
       - sh
       - -c
       - |
         export AIRFLOW_CONN_METADATA_DB="$(cat /run/secrets/metadata_db_conn)"
+        export AIRFLOW__SMTP__SMTP_MAIL_FROM="$(cat /run/secrets/smtp_user)"
+        export AIRFLOW__SMTP__SMTP_USER="$(cat /run/secrets/smtp_user)"
+        export AIRFLOW__SMTP__SMTP_PASSWORD="$(cat /run/secrets/smtp_password)"
         exec airflow celery worker
     restart: always
 
@@ -198,6 +232,10 @@ services:
 
 secrets:
   google_service_account_key:
-    file: google-service-account-key.json
+    file: ./secrets/google-service-account-key.json
   metadata_db_conn:
-    file: metadata_db_conn.txt
+    file: ./secrets/metadata_db_conn
+  smtp_user:
+    file: ./secrets/smtp_user
+  smtp_password:
+    file: ./secrets/smtp_password
