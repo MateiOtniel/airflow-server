@@ -11,3 +11,6 @@ pip install --upgrade pip setuptools
 pip install \
   --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.11.txt" \
   -r requirements.txt
+
+# run the data script
+python -m scripts.data_simulator
