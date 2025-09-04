@@ -60,18 +60,17 @@ def generate_and_upload(spark: SparkSession, date: str, bucket: str):
     # ----------- CONFIG -----------
     NUM_CLIENTS = int(os.getenv("NUM_CLIENTS", 10_000))
 
-    SALES_PER_CLIENT_RANGE   = (10, 50)
+    SALES_PER_CLIENT_RANGE   = (10, 15)
     ACCOUNTS_PER_CLIENT_RANGE = (0.9, 1.3)
     LOANS_PER_CLIENT_RANGE   = (0.03, 0.08)
     FEES_PER_LOAN_RANGE      = (0.20, 0.40)
     # ------------------------------
 
-    # Master list de clienți
+
     client_ids = list(range(1, NUM_CLIENTS + 1))
     random.shuffle(client_ids)
     pick_client = lambda: random.choice(client_ids)
 
-    # Calculează mărimi
     sales_count   = int(NUM_CLIENTS * random.uniform(*SALES_PER_CLIENT_RANGE))
     accounts_count= int(NUM_CLIENTS * random.uniform(*ACCOUNTS_PER_CLIENT_RANGE))
     loans_count   = int(NUM_CLIENTS * random.uniform(*LOANS_PER_CLIENT_RANGE))

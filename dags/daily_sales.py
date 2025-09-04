@@ -48,7 +48,11 @@ with DAG(
             "--dataset", "bank_raw_daily_ingest_analytics",
             "--table", "daily_sales",
             "--temp-bucket", BUCKET,
-        ]
+        ],
+        conf = {
+            "spark.hadoop.fs.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem",
+            "spark.hadoop.fs.AbstractFileSystem.gs.impl": "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS",
+        },
     )
 
     mail = EmailOperator(

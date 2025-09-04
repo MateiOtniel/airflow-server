@@ -25,14 +25,18 @@ RUN pip install --no-cache-dir --upgrade pip setuptools \
       -r ${AIRFLOW_HOME}/requirements.txt \
  && rm ${AIRFLOW_HOME}/requirements.txt
 
-# ---- Installing BigQuery connectors în pyspark/jars ----
+
+# ---- BigQuery + GCS (shaded) jars pentru Spark 3.5.x / Scala 2.12 ----
 USER root
-ARG BQ_VER=0.36.3
-ARG BQ_JAR="spark-bigquery-with-dependencies_2.12-${BQ_VER}.jar"
-RUN py_site=$(python -c "import pyspark, os; print(os.path.dirname(pyspark.__file__))") \
- && mkdir -p "${py_site}/jars" \
- && curl -fSL "https://repo1.maven.org/maven2/com/google/cloud/spark/spark-bigquery-with-dependencies_2.12/${BQ_VER}/${BQ_JAR}" \
-      -o "/tmp/${BQ_JAR}" \
- && mv "/tmp/${BQ_JAR}" "${py_site}/jars/${BQ_JAR}" \
- && chown -R airflow:root "${py_site}/jars"
+ARG SPARK_BQ_VER=0.42.4
+ARG GCS_VER=hadoop3-2.2.11
+RUN set -eux; \
+    py_site=$(python -c "import pyspark, os; print(os.path.dirname(pyspark.__file__))"); \
+    jars_dir="${py_site}/jars"; \
+    mkdir -p "${jars_dir}"; \
+    curl -fSL "https://repo1.maven.org/maven2/com/google/cloud/spark/spark-bigquery-with-dependencies_2.12/${SPARK_BQ_VER}/spark-bigquery-with-dependencies_2.12-${SPARK_BQ_VER}.jar" \
+      -o "${jars_dir}/spark-bigquery-with-dependencies_2.12-${SPARK_BQ_VER}.jar"; \
+    curl -fSL "https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/${GCS_VER}/gcs-connector-${GCS_VER}-shaded.jar" \
+      -o "${jars_dir}/gcs-connector-${GCS_VER}-shaded.jar"; \
+    chown -R airflow:root "${jars_dir}"
 USER airflow
