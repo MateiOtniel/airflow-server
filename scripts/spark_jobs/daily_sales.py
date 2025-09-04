@@ -78,7 +78,6 @@ def _aggregate_accounts_per_client(acc_df: DataFrame, event_date: str) -> DataFr
 
 
 def main():
-    # parse_args already used in your job; we reuse the same keys
     args = parse_args(["date", "project", "dataset", "table", "temp-bucket"])
 
     spark = (
@@ -99,7 +98,7 @@ def main():
     sales_agg = _aggregate_sales_per_client(sales_raw, event_date)
     accs_agg  = _aggregate_accounts_per_client(accs_raw, event_date)
 
-    # 3) Combine (clients may exist in only one side)
+    # 3) Combine
     combined = (
         sales_agg.join(accs_agg, on="client_id", how="full")
         .withColumn("total_spent", coalesce(col("total_spent"), lit(0.0)))
@@ -108,7 +107,7 @@ def main():
         .select("event_date", "client_id", "total_spent", "opening_balance")
     )
 
-    # 4) Write to BigQuery (append) via your writer
+    # 4) Write to BigQuery
     table_fqn = f"{args.project}.{args.dataset}.{args.table}"
     write_to_bigquery(combined, table_fqn)
 
