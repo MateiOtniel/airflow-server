@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-import glob
 import os
 import random
-import shutil
 import uuid
 from datetime import datetime, timedelta
 
-from google.cloud import storage
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import (
     StructType, StructField,
@@ -14,6 +11,7 @@ from pyspark.sql.types import (
 )
 
 from plugins.data_categories import (ACCOUNT_TYPES, CATEGORIES, LOAN_TYPES, MERCHANTS)
+from plugins.writer import write_single_csv
 
 
 def _inject_errors_spark(rows: list, schema: StructType, error_rate: float, spark: SparkSession) -> DataFrame:
@@ -33,25 +31,6 @@ def _inject_errors_spark(rows: list, schema: StructType, error_rate: float, spar
         else:
             rows[idx][field] = None
     return spark.createDataFrame(rows, schema)
-
-
-def write_single_csv(df: DataFrame, temp_dir: str, final_path: str):
-    """
-    Coalesce to one partition, write to temp_dir, then upload the single CSV to final_path on GCS.
-    """
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir)
-    df.coalesce(1).write.mode("overwrite").option("header", "true").csv(temp_dir)
-
-    part_file = next(glob.iglob(os.path.join(temp_dir, "part-*.csv")))
-    bucket_name, blob_path = final_path.replace("gs://", "").split("/", 1)
-
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_path)
-    blob.upload_from_filename(part_file)
-
-    shutil.rmtree(temp_dir)
 
 
 def generate_and_upload(spark: SparkSession, date: str, bucket: str):

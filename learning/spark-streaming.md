@@ -206,6 +206,22 @@ from pyspark.sql.functions import window, session_window
   .sum("amount"))
 ```
 
+Recap rapid (în cuvinte simple)
+
+Tumbling = „cutii” de timp fixe, fără suprapunere.
+
+Sliding = cutii care se și suprapun; același eveniment poate „pica” în mai multe.
+
+Session = grupezi evenimentele unui client atâta timp cât nu există pauze mai mari decât gap-ul.
+
+Watermark = „cât aștepți” întârziații în funcție de event time și când eliberezi memoria.
+
+Boundary = start inclusiv, end exclusiv.
+
+Late data = mai vechi decât watermark → DROP.
+
+Append emite doar ferestre închise (după watermark).
+
 ### 4.6 Output modes
 
 * `append`: rânduri finalizate (ex. ferestre închise)
