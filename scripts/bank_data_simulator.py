@@ -39,7 +39,7 @@ def generate_and_upload(spark: SparkSession, date: str, bucket: str):
     # ----------- CONFIG -----------
     NUM_CLIENTS = int(os.getenv("NUM_CLIENTS", 10_000))
 
-    SALES_PER_CLIENT_RANGE   = (1000, 1500)
+    SALES_PER_CLIENT_RANGE   = (10, 15)
     ACCOUNTS_PER_CLIENT_RANGE = (0.9, 1.3)
     LOANS_PER_CLIENT_RANGE   = (0.03, 0.08)
     FEES_PER_LOAN_RANGE      = (0.20, 0.40)
