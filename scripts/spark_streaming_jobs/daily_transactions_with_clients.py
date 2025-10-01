@@ -1,4 +1,4 @@
-# scripts/spark_jobs/daily_transactions_with_clients_stream.py
+# scripts/spark_jobs/daily_transactions_with_clients.py
 import os
 import logging
 from typing import Optional

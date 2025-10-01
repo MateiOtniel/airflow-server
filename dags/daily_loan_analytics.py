@@ -49,7 +49,7 @@ with DAG(
 
     spark_job = SparkSubmitOperator(
         task_id = 'run_loan_analytics',
-        application = 'scripts/spark_jobs/daily_loan_analytics.py',
+        application = 'scripts/spark_sql_jobs/daily_loan_analytics.py',
         conn_id = 'spark_default',
         application_args = [
             "--date", "{{ (params.date or ds) }}",

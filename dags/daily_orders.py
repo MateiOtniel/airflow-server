@@ -21,7 +21,7 @@ with DAG(
 
     spark_job = SparkSubmitOperator(
         task_id = 'run_daily_orders',
-        application = 'scripts/spark_jobs/daily_orders_total_stream.py',
+        application = 'scripts/spark_streaming_jobs/daily_orders_total.py',
         conn_id = 'spark_default',
         application_args = [
             "--date", "{{ (params.date or ds) }}",

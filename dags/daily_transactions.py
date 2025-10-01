@@ -18,7 +18,7 @@ with DAG(
 
     spark_job = SparkSubmitOperator(
         task_id="run_daily_transactions",
-        application="scripts/spark_jobs/daily_transactions_with_clients_stream.py",
+        application="scripts/spark_streaming_jobs/daily_transactions_with_clients.py",
         conn_id="spark_default",
         application_args=[
             "--date", "{{ (params.date or ds) }}",

@@ -1,4 +1,4 @@
-# scripts/spark_jobs/daily_orders_total_stream.py
+# scripts/spark_jobs/daily_orders_total.py
 import os
 import logging
 from typing import Optional
