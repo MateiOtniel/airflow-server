@@ -1,0 +1,72 @@
+TASK: Build a Loan Analytics Report
+You need to create a SQL query that combines loan data, late payment fees, and client spending to create a comprehensive loan analysis report.
+Available Data Tables:
+
+loans_clean - Basic loan information
+fees_clean - Late payment fees charged to clients
+sales_clean - Daily client spending transactions
+
+Required Steps & Calculations:
+STEP 1: Basic Loan Calculations (loan_basics CTE)
+Calculate these fields from loans_clean:
+
+Keep: loan_id, client_id, principal_amount, interest_rate, term_months, loan_type
+loan_date: Convert start_date to DATE format
+total_interest: Simple interest = Principal × (Rate/100) × (Months/12) - round to 2 decimals
+monthly_payment: Loan amortization formula = Principal × [(Rate/100/12) × (1 + Rate/100/12)^Months] / [(1 + Rate/100/12)^Months - 1] - round to 2 decimals
+loan_size: Categorize by principal_amount: <10K='Small Loan', <30K='Medium Loan', else='Large Loan'
+rate_category: Group by interest_rate: ≤5%='Low Rate', ≤8%='Normal Rate', else='High Rate'
+Filter: Only loans where start_date matches the given event_date
+
+STEP 2: Fee Analysis (fee_summary CTE)
+Aggregate from fees_clean by loan_id and client_id:
+
+late_payment_count: Count of fee incidents
+total_fees: Sum of all fee_amount
+avg_fee: Average fee_amount (round to 2 decimals)
+worst_delay_days: Maximum days_delayed
+avg_delay_days: Average days_delayed (round to 1 decimal)
+payment_behavior: Based on MAX(days_delayed): >30='Bad at Paying', >10='Sometimes Forgets', else='Pretty Good'
+Filter: Only fees where fee_date matches the given event_date
+
+STEP 3: Client Spending (client_activity CTE)
+Aggregate from sales_clean by client_id:
+
+transactions_today: Count of transactions
+total_spending: Sum of all amounts
+avg_per_transaction: Average transaction amount (round to 2 decimals)
+food_spending: Sum amounts where category IN ('groceries', 'food') - round to 2 decimals
+fun_spending: Sum amounts where category IN ('entertainment', 'shopping') - round to 2 decimals
+spending_level: Based on total_spending: >300='Spends Lots', >100='Spends Normal', else='Saves Money'
+Filter: Only transactions where transaction_date matches the given event_date
+
+STEP 4: Data Integration (loan_analysis CTE)
+LEFT JOIN all previous CTEs starting from loan_basics:
+
+Use COALESCE to handle NULLs with these defaults:
+
+Fee fields: 0 for numbers, 'Always On Time' for payment_behavior
+Spending fields: 0 for numbers, 'Unknown' for spending_level
+
+
+Calculate total_revenue: total_interest + fees_collected
+Calculate profit_ratio: total_revenue ÷ principal_amount (round to 3 decimals)
+Calculate payment_burden_percent: (monthly_payment ÷ (daily_spending × 30)) × 100, round to 1 decimal (handle division by zero with CASE)
+
+STEP 5: Final Scoring (final_results CTE)
+Create these additional fields:
+
+report_date: Use the event_date parameter as a string
+risk_score: Add points for: Bad Payment(3pts), Sometimes Forgets(1pt), High Rate(3pts), Normal Rate(1pt), Payment Burden >40%(2pts), >25%(1pt), Large Loan(2pts)
+risk_level: Based on risk_score: ≥6='Risky', ≥3='Kinda Risky', else='Pretty Safe'
+profit_level: Based on profit_ratio: ≥0.20='Makes Lots of Money', ≥0.15='Makes Good Money', ≥0.10='Makes Some Money', else='Makes Little Money'
+recommendation: Combine logic: Great profit + Good payment = 'Great Customer - Give Them More!', Bad payment + Low profit = 'Watch Out - Might Be Trouble', Good profit = 'Good Loan - Keep It', else = 'Normal Loan'
+
+STEP 6: Final Output
+
+SELECT all fields from final_results
+ORDER BY risk_score DESC, profit_ratio DESC
+
+Your Task:
+Write the complete SQL using CTEs (WITH statements) following these specifications. Remember to use proper SQL syntax with ROUND(), COALESCE(), CASE WHEN, and appropriate JOIN types.
+Now go ahead and write your _create_loan_analytics_with_sql function with this SQL! 🚀

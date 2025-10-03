@@ -65,11 +65,11 @@ def _create_spending_analytics_with_sql(spark: SparkSession, event_date: str) ->
                 else 'Night'
             end as time_of_day,
             case
-                when dayofweek(transaction_date) in (1, 7) then True
-                else False
-            when as is_weekend
-        from transactions
-        where event_date = '{event_date}'
+                when dayofweek(transaction_date) in (1, 7) then true
+                else false
+            end as is_weekend
+        from sales_clean
+        where date(transaction_date) = '{event_date}'
         and client_id is not null
         and amount is not null
     ),
@@ -82,11 +82,11 @@ def _create_spending_analytics_with_sql(spark: SparkSession, event_date: str) ->
             max(amount) as max_transaction,
             min(amount) as min_transaction,
             count(distinct merchant) as unique_merchants,
-            count(distinct category) as unique_category,
+            count(distinct category) as unique_categories,
             sum(case when is_weekend = true then amount else 0 end) as weekend_spending,
             sum(case when is_weekend = false then amount else 0 end) as weekday_spending,
             count(case when time_of_day = 'Morning' then 1 end) as morning_transactions,
-            count(case when time_of_day = 'Evening' then 1 end) as evening_transactions,
+            count(case when time_of_day = 'Evening' then 1 end) as evening_transactions
         from transaction_details
         group by client_id
     ),
@@ -104,7 +104,7 @@ def _create_spending_analytics_with_sql(spark: SparkSession, event_date: str) ->
                     when category not in ('groceries', 'food', 'entertainment', 'shopping', 'transport', 'bills') then amount
                     else 0
                 end
-            ) as other_spent,
+            ) as other_spent
         from transaction_details
         group by client_id
     ),
@@ -135,7 +135,7 @@ def _create_spending_analytics_with_sql(spark: SparkSession, event_date: str) ->
             avg(total_spent) as avg_spending_all_clients,
             stddev(total_spent) as stddev_spending,
             percentile_cont(0.25) within group (order by total_spent) as percentile_25,
-            percentile_cont(0.75) withing group (order by total_spent) as percentile_75
+            percentile_cont(0.75) within group (order by total_spent) as percentile_75
         from client_spending_summary
     ),
     account_rankings as (
@@ -151,14 +151,106 @@ def _create_spending_analytics_with_sql(spark: SparkSession, event_date: str) ->
         select
             client_id,
             sum(opening_balance) as total_opening_balance,
-            count(ac.account_id) as account_count,
-            ar.account_type as primary_account_type
-        from account_rankings ar
-        join accounts_clean ac on ar.client_id = ac.client_id
-            and date(ac.open_date) <= '{event_date}'
-        where ar.row_num = 1
-        group by ar.client_id, ar.account_type
+            count(*) as account_count,
+            max(case when row_num = 1 then account_type end) as primary_account_type
+        from account_rankings
+        group by client_id
+    ),
+    final_metrics as (
+        select
+            -- base metrics
+            css.client_id,
+            css.total_spent,
+            css.transaction_count,
+            css.avg_transaction,
+            css.max_transaction,
+            css.min_transaction,
+            css.unique_merchants,
+            css.unique_categories,
+            css.weekend_spending,
+            css.weekday_spending,
+            css.morning_transactions,
+            css.evening_transactions,
+            cb.groceries_spent,
+            cb.food_spent,
+            cb.entertainment_spent,
+            cb.shopping_spent,
+            cb.transport_spent,
+            cb.bills_spent,
+            cb.other_spent,
+            mp.favorite_merchant,
+            mp.favorite_merchant_spending,
+            ca.total_opening_balance,
+            ca.account_count,
+            ca.primary_account_type,
+            sp.avg_spending_all_clients,
+            sp.stddev_spending,
+            sp.percentile_25,
+            sp.percentile_75,
+            -- calculated metrics
+            round(css.transaction_count / 24.0, 2) as spending_frequency,
+            round(css.weekend_spending / nullif(css.total_spent, 0) * 100, 1) as weekend_ratio,
+            round((css.unique_merchants + css.unique_categories) / 2.0, 1) as diversity_score,
+            round(css.total_spent / nullif(ca.total_opening_balance, 0), 3) as spending_to_balance_ratio,
+            greatest(
+                cb.groceries_spent,
+                cb.food_spent,
+                cb.entertainment_spent,
+                cb.shopping_spent,
+                cb.transport_spent,
+                cb.bills_spent,
+                cb.other_spent
+            ) as max_category_spending
+        from client_spending_summary css
+        left join category_breakdown cb on css.client_id = cb.client_id
+        left join merchant_preferences mp on mp.client_id = css.client_id
+        left join client_accounts ca on css.client_id = ca.client_id
+        cross join spending_patterns sp
+    ),
+    final_analytics as (
+        select
+            *,
+            -- classifications
+            case
+                when total_spent > avg_spending_all_clients + stddev_spending then 'High Spender'
+                when total_spent > avg_spending_all_clients then 'Above Average'
+                when total_spent between percentile_25 and percentile_75 then 'Average'
+                else 'Low Spender'
+            end as spending_tier,
+            case
+                when total_spent > 2000 and diversity_score > 5 then 'VIP - High Value'
+                when weekend_ratio > 60 then 'Weekend Warrior'
+                when unique_merchants <= 3 and transaction_count > 8 then 'Routine Shopper'
+                when avg_transaction < 50 then 'Bargain Hunter'
+                when max_transaction > avg_transaction * 5 then 'Impulsive Buyer'
+                else 'Regular Customer'
+            end as customer_segment,
+            case
+                when max_category_spending = groceries_spent then 'groceries'
+                when max_category_spending = food_spent then 'food'
+                when max_category_spending = entertainment_spent then 'entertainment'
+                when max_category_spending = shopping_spent then 'shopping'
+                when max_category_spending = transport_spent then 'transport'
+                when max_category_spending = bills_spent then 'bills'
+                else 'other'
+            end as shopping_preference,
+            case
+                when spending_to_balance_ratio > 0.8 then 'High Risk'
+                when spending_to_balance_ratio > 0.5 then 'Medium Risk'
+                when spending_to_balance_ratio > 0 then 'Low Risk'
+                else 'Unknown'
+            end as risk_indicator,
+            case
+                when morning_transactions > evening_transactions then 'Morning Person'
+                else 'Evening Person'
+            end as time_preference
+        from final_metrics
     )
+    select
+        '{event_date}' as report_date,
+        *
+    from final_analytics
+    order by total_spent desc, diversity_score desc
     """
 
     return spark.sql(analytics_sql)

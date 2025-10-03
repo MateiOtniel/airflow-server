@@ -1,0 +1,169 @@
+═══════════════════════════════════════════════════════════════════════════
+🎯 TASK DESCRIPTION - ANALIZA COMPORTAMENTULUI DE CHELTUIELI
+═══════════════════════════════════════════════════════════════════════════
+
+Trebuie să creezi un raport complet de analiză a cheltuielilor clienților
+pentru a înțelege pattern-urile de consum și a segmenta clienții.
+
+📊 CE TREBUIE SĂ CALCULEZI (în ordine):
+
+───────────────────────────────────────────────────────────────────────────
+STEP 1: CTE "transaction_details" 
+───────────────────────────────────────────────────────────────────────────
+Pentru fiecare tranzacție extrage:
+- transaction_id, client_id, amount, merchant, category
+- transaction_hour: ora din zi (0-23) folosind HOUR(transaction_date)
+- transaction_day_of_week: ziua săptămânii (1=Duminică, 7=Sâmbătă) 
+  folosind DAYOFWEEK(transaction_date)
+- time_of_day: clasifică ora în:
+    * 'Morning' (6-11)
+    * 'Afternoon' (12-17)
+    * 'Evening' (18-22)
+    * 'Night' (23-5)
+- is_weekend: TRUE dacă transaction_day_of_week este 1 sau 7, altfel FALSE
+
+Filtrează doar tranzacțiile din event_date unde client_id și amount nu sunt NULL.
+
+───────────────────────────────────────────────────────────────────────────
+STEP 2: CTE "client_spending_summary"
+───────────────────────────────────────────────────────────────────────────
+Grupează după client_id și calculează:
+- total_spent: suma totală cheltuită
+- transaction_count: numărul de tranzacții
+- avg_transaction: media valorii tranzacțiilor (rotunjită la 2 zecimale)
+- max_transaction: cea mai mare tranzacție
+- min_transaction: cea mai mică tranzacție
+- unique_merchants: număr de comercianți unici (COUNT(DISTINCT merchant))
+- unique_categories: număr de categorii unice
+- weekend_spending: suma cheltuită în weekend (SUM(CASE WHEN is_weekend...))
+- weekday_spending: suma cheltuită în timpul săptămânii
+- morning_transactions: număr tranzacții dimineața
+- evening_transactions: număr tranzacții seara
+
+───────────────────────────────────────────────────────────────────────────
+STEP 3: CTE "category_breakdown"
+───────────────────────────────────────────────────────────────────────────
+Grupează după client_id și calculează pentru fiecare categorie:
+- groceries_spent: suma pentru categoria 'groceries'
+- food_spent: suma pentru 'food'
+- entertainment_spent: suma pentru 'entertainment'
+- shopping_spent: suma pentru 'shopping'
+- transport_spent: suma pentru 'transport'
+- bills_spent: suma pentru 'bills'
+- other_spent: suma pentru orice altă categorie
+
+Hint: Folosește SUM(CASE WHEN category = 'groceries' THEN amount ELSE 0 END)
+
+───────────────────────────────────────────────────────────────────────────
+STEP 4: CTE "merchant_preferences"
+───────────────────────────────────────────────────────────────────────────
+Pentru fiecare client, identifică comerciantul favorit:
+- client_id
+- favorite_merchant: comerciantul la care a cheltuit cel mai mult
+- favorite_merchant_spending: suma cheltuită la acel comerciant
+- favorite_merchant_visits: numărul de vizite la acel comerciant
+
+Hint: Grupează după client_id și merchant, calculează suma și numărul,
+apoi folosește ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY suma DESC)
+pentru a selecta doar primul comerciant (WHERE row_num = 1).
+
+───────────────────────────────────────────────────────────────────────────
+STEP 5: CTE "spending_patterns"
+───────────────────────────────────────────────────────────────────────────
+Calculează statistici globale pentru comparație:
+- avg_spending_all_clients: media cheltuielilor tuturor clienților
+- stddev_spending: deviația standard a cheltuielilor
+- percentile_25: percentila 25 (folosește PERCENTILE_CONT(0.25) 
+  WITHIN GROUP (ORDER BY total_spent))
+- percentile_75: percentila 75
+
+Acestea vor fi valori scalare, deci folosește CROSS JOIN pentru a le 
+atașa fiecărui client.
+
+───────────────────────────────────────────────────────────────────────────
+STEP 6: CTE "client_accounts"
+───────────────────────────────────────────────────────────────────────────
+Din tabelul accounts_clean:
+- client_id
+- total_opening_balance: suma opening_balance pentru toate conturile clientului
+- account_count: numărul de conturi
+- primary_account_type: tipul de cont cu cea mai mare opening_balance
+  (folosește ROW_NUMBER() similar cu STEP 4)
+
+───────────────────────────────────────────────────────────────────────────
+STEP 7: CTE "final_analytics"
+───────────────────────────────────────────────────────────────────────────
+Combină toate CTE-urile anterioare cu LEFT JOIN și calculează:
+
+A. METRICI DE BAZĂ (din CTE-uri anterioare):
+   - Toate coloanele din client_spending_summary
+   - Toate coloanele din category_breakdown
+   - favorite_merchant, favorite_merchant_spending (din merchant_preferences)
+   - total_opening_balance, account_count, primary_account_type (din client_accounts)
+
+B. METRICI CALCULATE:
+   - spending_frequency: transaction_count / 24.0 (tranzacții pe oră în medie)
+   - weekend_ratio: weekend_spending / NULLIF(total_spent, 0) * 100 
+     (procent weekend, rotunjit la 1 zecimală)
+   - diversity_score: (unique_merchants + unique_categories) / 2.0
+     (cât de divers cheltuiește)
+   - spending_to_balance_ratio: total_spent / NULLIF(total_opening_balance, 0)
+     (cât din balantă cheltuiește, rotunjit la 3 zecimale)
+
+C. CLASIFICĂRI:
+   - spending_tier: bazat pe comparație cu avg_spending_all_clients
+       * 'High Spender' dacă > avg + stddev
+       * 'Above Average' dacă > avg
+       * 'Average' dacă între percentile_25 și percentile_75
+       * 'Low Spender' altfel
+   
+   - customer_segment: clasificare complexă bazată pe comportament
+       * 'VIP - High Value' dacă total_spent > 2000 AND diversity_score > 5
+       * 'Weekend Warrior' dacă weekend_ratio > 60
+       * 'Routine Shopper' dacă unique_merchants <= 3 AND transaction_count > 8
+       * 'Bargain Hunter' dacă avg_transaction < 50
+       * 'Impulsive Buyer' dacă max_transaction > avg_transaction * 5
+       * 'Regular Customer' altfel
+   
+   - shopping_preference: categoria în care cheltuiește cel mai mult
+       Folosește GREATEST() pentru a găsi maximul între toate categoriile
+       și apoi CASE pentru a identifica care este aceea
+   
+   - risk_indicator: indicator de risc financiar
+       * 'High Risk' dacă spending_to_balance_ratio > 0.8
+       * 'Medium Risk' dacă > 0.5
+       * 'Low Risk' altfel
+       * 'Unknown' dacă total_opening_balance este NULL sau 0
+   
+   - time_preference: când preferă să facă tranzacții
+       * 'Morning Person' dacă morning_transactions > evening_transactions
+       * 'Evening Person' altfel
+
+D. RECOMANDĂRI:
+   - marketing_action: recomandare de acțiune bazată pe segment
+       * Pentru 'VIP - High Value': 'Offer Premium Services'
+       * Pentru 'Bargain Hunter': 'Send Discount Offers'
+       * Pentru 'Weekend Warrior': 'Weekend Promotions'
+       * Pentru 'High Risk': 'Financial Advisory Needed'
+       * Pentru alții: 'Standard Marketing'
+
+───────────────────────────────────────────────────────────────────────────
+STEP 8: SELECT final
+───────────────────────────────────────────────────────────────────────────
+Selectează toate coloanele din final_analytics și adaugă:
+- report_date: '{event_date}' ca primul câmp
+
+Ordonează după:
+1. total_spent DESC (cei care cheltuiesc mai mult primii)
+2. diversity_score DESC (apoi după diversitate)
+
+═══════════════════════════════════════════════════════════════════════════
+💡 HINTS & TIPS:
+═══════════════════════════════════════════════════════════════════════════
+- Folosește COALESCE() pentru a evita NULL-uri în calcule
+- NULLIF(value, 0) previne împărțirea la zero
+- ROUND(value, decimals) pentru a rotunji numerele
+- LEFT JOIN pentru a păstra toți clienții chiar dacă nu au toate datele
+- Testează fiecare CTE individual înainte de a continua la următorul
+
+═══════════════════════════════════════════════════════════════════════════
