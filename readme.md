@@ -95,14 +95,16 @@ airflow-server/
 │       └── daily_transactions_with_clients.py  # streaming: join tranzactii
 │
 ├── plugins/
-│   ├── parser.py          # parse argparse CLI pentru joburi Spark
-│   ├── writer.py          # write_to_bigquery + write_single_csv
-│   └── data_categories.py # constante (tipuri de cont, categorii, etc.)
+│   ├── parser.py            # parse argparse CLI pentru joburi Spark
+│   ├── writer.py            # write_to_bigquery + write_single_csv
+│   ├── data_categories.py   # constante (tipuri de cont, categorii, etc.)
+│   └── accesa_readers.py    # scheme + readere CSV pentru cele 5 datasets Accesa
 │
 ├── scripts/data_generation/
 │   ├── bank_data_simulator.py          # genereaza CSV-uri batch (GCS)
 │   ├── streaming_bank_data_simulator.py # genereaza date streaming tranzactii+clienti
-│   └── streaming_orders_data_simulator.py # genereaza date streaming comenzi
+│   ├── streaming_orders_data_simulator.py # genereaza date streaming comenzi
+│   └── accesa_data_simulator.py        # genereaza an intreg de date retail Accesa
 │
 ├── Dockerfile             # imagine custom Airflow + Java + jars Spark/BQ/GCS
 ├── docker-compose.yaml    # stack complet: proxy, redis, postgres, airflow
@@ -235,6 +237,55 @@ SparkSubmit (daily_transactions_with_clients.py) ──► BigQuery (append stre
 
 ---
 
+## DAG-uri (retail Accesa)
+
+Pipeline separat pentru cerinta noua de la Accesa — 14 DAG-uri care acopera curatare, partitionare, analize pret/discount, demografie, comportament de cumparare, raportare financiara si recomandari.
+
+Datele sunt generate intr-o singura rulare (an intreg, ~10k clienti) si scrise in 5 CSV-uri in GCS:
+
+```
+accesa_customers/accesa_customers.csv
+accesa_products/accesa_products.csv
+accesa_product_prices/accesa_product_prices.csv
+accesa_discounts/accesa_discounts.csv
+accesa_transactions/accesa_transactions.csv
+```
+
+Schemele si readerele sunt definite o singura data in `plugins/accesa_readers.py` si reutilizate de toate joburile Spark.
+
+Toate DAG-urile au aceeasi forma ca cele de banca: `GCSObjectExistenceSensor` per input ──► `SparkSubmit` ──► `EmailOperator`, cu `log_dag_status` ca callback. Joburile scriu mai multe tabele in BigQuery — fiecare cu sufix peste `--table`-ul DAG-ului.
+
+| DAG | Ce face | Sufixe BQ |
+|---|---|---|
+| `accesa_data_preparation` | parseaza `fidelity_card` JSON, sparge adresa (UDF + built-ins), normalizeaza telefonul, detecteaza si umple preturi lipsa (preturile se schimba doar miercurea) | `_customers_clean`, `_missing_prices`, `_prices_filled` |
+| `accesa_storage_partitioning` | scrie produsele in Parquet (1 fisier/saptamana Wed-Tue) si CSV (7 fisiere/saptamana — unul/zi); top 100 clienti ca text | scrie direct in GCS: `accesa_products_parquet/`, `accesa_products_csv/`, `accesa_top_customers/` |
+| `accesa_price_change_behavior` | top schimbari de pret, produse care n-au scazut, cresteri inainte de discount, >30% scumpire, top 20 ieftiniri, predictie inflatie pentru sfarsit de 2026 | `_frequent_changes`, `_never_decreased`, `_increase_before_discount`, `_over_30_increase`, `_top20_cheaper`, `_inflation_prediction` |
+| `accesa_price_aggregations` | media pretului saptamanal pe categorie, pret net + TVA per produs | `_weekly_avg_per_category`, `_net_and_tva_per_product` |
+| `accesa_category_inference` | inferenta categoriei reale pentru produsele marcate `ALTELE`, lista categoriilor cu restrictie de varsta | `_inferred_categories`, `_age_restricted_categories` |
+| `accesa_discount_analysis` | media discount/saptamana, categoria cu cele mai multe oferte, produse cu 3+ discounturi, pret cu/fara card de fidelitate, cumparari in fereastra de discount, produse niciodata cumparate la oferta, economii ratate de non-fidelity | `_avg_discount_per_week`, `_discounts_per_category`, `_frequent_discount_products`, `_discounted_prices`, `_purchases_during_discount`, `_never_purchased_while_discounted`, `_missed_savings_non_fidelity` |
+| `accesa_customer_demographics` | grupe de varsta pe oras, cel mai tanar/batran din fiecare oras, varsta medie pe oras + tip card, numar minori, vechime card, top 5 cei mai vechi posesori per oras, card primit inainte de 25 | `_age_group_by_city`, `_youngest_oldest_per_city`, `_avg_age_per_city`, `_avg_age_by_fidelity_type`, `_underage_count`, `_fidelity_tenure`, `_top5_longest_per_city`, `_card_before_25` |
+| `accesa_customer_data_quality` | adrese lipsa pe tip de card, telefoane/emailuri lipsa, % cu prefix +40, % cu orice telefon, grupa de varsta cu cele mai multe telefoane lipsa, distributia providerilor de email, varsta medie + stddev pentru emailuri `@accesa.eu` | `_missing_address_by_fidelity`, `_missing_phone_email_counts`, `_phone_prefix_share`, `_phone_any_share`, `_age_group_most_missing_phone`, `_email_providers`, `_accesa_email_age_stats` |
+| `accesa_customer_names_addresses` | strazi cele mai comune pe oras, nume de familie cele mai comune, clienti cu nume identic | `_common_streets_per_city`, `_common_family_names`, `_identical_full_names` |
+| `accesa_customer_metrics` | total produse/client, marime medie cos pe metoda de plata, comparatie fidelity vs. non-fidelity, top 10 cheltuieli si top 10 produse cumparate in 2025, minori care au cumparat produse cu restrictie | `_total_products_per_customer`, `_avg_basket_by_payment`, `_fidelity_vs_non_fidelity`, `_top10_spenders_2025`, `_top10_buyers_by_items_2025`, `_underage_age_restricted` |
+| `accesa_item_metrics` | produsul cel mai cumparat, perechi cumparate frecvent impreuna, top 10 in decembrie, categoria cu cele mai multe discounturi | `_most_purchased_products`, `_frequently_bought_together`, `_top10_december`, `_category_with_most_discounts` |
+| `accesa_temporal_trends` | zilele in care magazinul a fost inchis, luna cu cele mai multe vanzari, top 10 zile, ora de varf per zi, statistici orare (min/max/avg), max tranzactii la deschidere/inchidere, distributie zilnica Lu-Du, evolutia cumparaturilor de vineri | `_closure_days`, `_busiest_month`, `_top10_days`, `_peak_hour_per_day`, `_hourly_item_stats`, `_max_tx_open_close`, `_daily_distribution`, `_friday_trends` |
+| `accesa_financial_revenue` | total venit 2025 (overall, fara discount, doar discount, lunar), TVA total, TVA recuperabil pentru persoane juridice | `_totals_2025`, `_monthly_2025`, `_total_tva_2025`, `_refundable_tva_legal_entities` |
+| `accesa_recommendations` | top 5 produse recomandate per client pe baza categoriilor preferate + popularitate, excluzand ce a cumparat deja | `_next_product_recommendations` |
+
+### Cum se ruleaza
+
+```bash
+# 1) genereaza datele (o singura data, an intreg)
+GCS_BUCKET=bank-raw-daily-ingest python scripts/data_generation/accesa_data_simulator.py
+
+# 2) trigger orice DAG accesa din UI sau CLI
+docker exec airflow_scheduler airflow dags trigger accesa_data_preparation
+```
+
+DAG-urile nu au parametru `date` — datele sunt statice (generate o data pentru tot anul) si DAG-urile sunt trigger-uite manual.
+
+---
+
 ## Conexiuni si integrari
 
 ### Airflow Connections (configurate in UI sau env)
@@ -313,6 +364,15 @@ Genereaza continuu perechi de fisiere tranzactii + clienti la fiecare 10 secunde
 
 - Produce: `transactions/date=YYYY-MM-DD/tx_*.csv` si `clients/date=YYYY-MM-DD/clients_*.csv`
 - Folosit impreuna cu DAG-ul `daily_transactions`
+
+### `accesa_data_simulator.py` (batch, retail Accesa)
+
+O singura rulare → un an intreg de date pentru toate cele 14 DAG-uri Accesa.
+
+- Produce: `accesa_customers.csv`, `accesa_products.csv`, `accesa_product_prices.csv`, `accesa_discounts.csv`, `accesa_transactions.csv` (toate sub `accesa_<dataset>/` in GCS)
+- Preturile se schimba doar miercurea, ~5% zile lipsa pentru detectie de inregistrari lipsa
+- Variabile: `NUM_CUSTOMERS` (implicit 10.000), `START_DATE` (`2025-01-01`), `END_DATE` (`2025-12-31`)
+- Injecteaza erori (~2-5%) ca si la simulatorul de banca
 
 ---
 
