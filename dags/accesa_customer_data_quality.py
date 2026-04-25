@@ -31,7 +31,7 @@ with DAG(
         conn_id = 'spark_default',
         application_args = [
             "--project", GCP_PROJECT_ID,
-            "--dataset", "accesa_analytics",
+            "--dataset", "bank_raw_daily_ingest_analytics",
             "--table", "accesa_customer_data_quality",
             "--temp-bucket", BUCKET,
         ],
