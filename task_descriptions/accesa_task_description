@@ -1,0 +1,101 @@
+Business/Functional requirements
+🛠️ Data Cleaning & Preparation
+Missing Data Handling
+	•	Detect missing product price records.
+	•	Fill missing product prices, assuming price changes can only occur on Wednesdays.
+Data Transformation & Parsing
+	•	Parse fidelity_card JSON string into a struct with card_id, issue_date, and type. 
+	•	Parse and normalize address strings into structured fields: city, street_name, street_type, street_number (using both UDFs and built-in Spark functions). 
+	•	Standardize phone numbers to include country prefix and infer mobile operators.
+
+💾 Data Storage Requirements
+Parquet Format
+	•	Save products as Parquet, partitioned by week (Wednesday–Tuesday). Each partition must contain a single file.
+CSV Format
+	•	Save products as CSV, partitioned by week (Wednesday–Tuesday). Each partition must contain 7 files (one per day).
+Text Format
+	•	Save the top 100 customers by spending in a text file.
+
+🧮 Product & Price Analytics
+Price Change Behavior
+	•	Identify products with the most frequent price changes during 2025.
+	•	Identify products whose price increased or stayed the same throughout the year.
+	•	Find products that increased in price the week before a discount was offered.
+	•	Identify products with a price increase of more than 30% compared to the first day.
+	•	Identify top 20 products that became cheaper compared to the first day.
+	•	Track inflation trends and predict prices for the end of 2026.
+Price Aggregations
+	•	Calculate average weekly price per product category.
+	•	Calculate net price and tax (TVA) for each product.
+Category Inference
+	•	Infer correct product category for entries labeled “ALTELE”.
+	•	Identify product categories that must not be sold to underage customers, ex: energy drinks, alcoholic beverages, smoke, or any similar category.
+
+🧾 Discount Analysis
+	•	Calculate the average discount percentage per week.
+	•	Identify the category offering the most discounts throughout the year.
+	•	List products with at least 3 separate discount occurrences.
+	•	Calculate the discounted price for each product (fidelity card holders get full discount, others get half).
+	•	Determine how often discounted products were purchased during their valid discount week.
+	•	Identify products that were never purchased while discounted.
+	•	Estimate how much non-fidelity customers could have saved if they had used a fidelity card.
+
+👥 Customer Profile & Behavior
+Demographic Analysis
+	•	Classify customers by age groups: underage, [18–25), [25–35), [35–50), [50–65), 65+.
+	•	Visualize number of customers by age group for each city.
+	•	Identify the youngest and oldest customer per city.
+	•	Compute average customer age per city and by fidelity card type.
+	•	Determine how many underage customers exist.
+	•	Calculate how long each customer has held a fidelity card (in years).
+	•	Identify top 5 longest-tenured fidelity card holders per city.
+	•	Determine if a customer received their card before turning 25.
+Data Quality
+	•	Find customers with missing addresses and analyze them by fidelity card type.
+	•	Determine how many customers didn't provide phone number or email address.
+	•	Find the % of customers who shared a phone number with country prefix.
+	•	Find the % of customers who shared any phone number.
+	•	Identify the age group with the most customers who didn’t share a phone number.
+	•	Analyze distribution of email providers.
+	•	Compute average and standard deviation of age for customers with an @accesa email.
+Name & Address Analysis
+	•	Identify most common street names per city.
+	•	Find most common family names.
+	•	Detect customers with identical full names.
+
+🛍️ Purchase Behavior & Sales Analysis
+Customer-Level Metrics
+	•	Compute total products purchased per customer.
+	•	Find average basket size by payment method.
+	•	Compare spending behavior of fidelity vs. non-fidelity customers.
+	•	List top 10 customers by total spending in 2025.
+	•	List top 10 customers by items purchased in 2025.
+	•	List underage customers who bought products from age-restricted categories.
+Item-Level Metrics
+	•	Identify the most purchased product.
+	•	Identify products that are frequently bought together.
+	•	List top 10 most purchased products in December.
+	•	Get the product category with the most discounts.
+Temporal Trends
+	•	Identify store closure days.
+	•	Find the month with the most purchased items.
+	•	List top 10 days with most purchased items in 2025.
+	•	Analyze peak hours during each day.
+	•	Get min, max, and average number of purchased items by hour.
+	•	Identify max transactions during opening and closing hours.
+	•	Visualize daily customer distribution throughout the week.
+	•	Visualize Friday purchase trends over the year.
+
+💵 Financial & Revenue Analysis
+Store Revenue
+	•	Compute total income:
+	◦	Overall for 2025.
+	◦	Excluding discounted products.
+	◦	Only for discounted products.
+	◦	Monthly for 2025.
+Tax Calculation
+	•	Compute total TVA owed for 2025.
+	•	Compute total refundable taxes for legal entities (persoane juridice).
+
+🤖 Predictive & Recommendation Systems
+	•	Recommend next products using customer and category similarity.

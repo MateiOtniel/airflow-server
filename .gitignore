@@ -25,3 +25,7 @@ archive/
 
 # Secret folder
 secrets/
+
+generate_timesheet.py
+
+learning/
